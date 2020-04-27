@@ -5,14 +5,19 @@ import numpy as np
 import tensorflow as tf
 from root_node import root_network
 from branch_node import branch_network
-
+best_root_name = None
+best_branch1_name = None
+best_branch2_name = None
 def initial_learn(root_net,branch_net1,branch_net2):
-    root_net.train()
-    branch_net1.train()
-    branch_net2.train()
+    global best_root_name, best_branch1_name, best_branch2_name
+    _, best_root_name = root_net.train()
+    _, best_branch1_name = branch_net1.train()
+    _, best_branch2_name = branch_net2.train()
+    print (best_root_name, best_branch1_name, best_branch2_name)
     return root_net,branch_net1,branch_net2
 
 def incremental_learn(root,branch1,branch2,g1,g2,g3,new_class):
+    global best_root_name, best_branch1_name, best_branch2_name
     dataset=data_process()
     idx=np.arange(0,5000)
     np.random.shuffle(idx)
@@ -32,14 +37,14 @@ def incremental_learn(root,branch1,branch2,g1,g2,g3,new_class):
     branch1_class=[3,5,7]
     branch2_class=[1,8,9]
     with g1.as_default():
-        saver = tf.train.import_meta_graph('root_initial_variables/root.module-2335.meta')
+        saver = tf.train.import_meta_graph(best_root_name + '.meta')
         graph = tf.get_default_graph()
         image = graph.get_tensor_by_name('Placeholder:0')
         fc3 = graph.get_tensor_by_name('dense_2/BiasAdd:0')
         logits = tf.argmax(tf.nn.softmax(fc3), 1)
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options) ,graph=g1) as sess:
         sess.run(tf.global_variables_initializer())
-        saver.restore(sess,'root_initial_variables/root.module-2335')
+        saver.restore(sess, best_root_name)
         while(1):
             if new_class==0:
                 break
@@ -67,12 +72,13 @@ def incremental_learn(root,branch1,branch2,g1,g2,g3,new_class):
             new_class-=1
     print(branch1_class, branch1.num_class)
     print(branch2_class, branch2.num_class)
-    fine_tune('branch1_initial_variables', branch1.num_class,branch1_class,g2)
-    fine_tune('branch2_initial_variables', branch2.num_class,branch2_class,g3)
-
-def fine_tune(graph_name,num_class,branch_class,g):
+    branch1_best_test_acc = fine_tune('branch1_initial_variables', branch1.num_class,branch1_class,g2, best_branch1_name)
+    branch2_best_test_acc = fine_tune('branch2_initial_variables', branch2.num_class,branch2_class,g3, best_branch2_name)
+    print ("branch 1 best test acc : {}".format(branch1_best_test_acc))
+    print ("branch 2 best test acc : {}".format(branch2_best_test_acc))
+def fine_tune(graph_name,num_class,branch_class,g, model_name):
     with g.as_default():
-        saver=tf.train.import_meta_graph(graph_name+'/branch.module-3502.meta')
+        saver=tf.train.import_meta_graph(model_name + '.meta')
         graph=tf.get_default_graph()
         image=graph.get_tensor_by_name('Placeholder:0')
         if graph_name=='branch1_initial_variables':
@@ -94,11 +100,12 @@ def fine_tune(graph_name,num_class,branch_class,g):
         optimizer=tf.train.AdamOptimizer(0.001, name='fine_tune').minimize(cross_entropy)
         correct=tf.equal(target,tf.argmax(tf.nn.softmax(fc3),axis=1))
         accuracy=tf.reduce_mean(tf.cast(correct,tf.float32))
+        best_acc = 0
         with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options),graph=g) as sess:
             sess.run(tf.global_variables_initializer())
-            saver.restore(sess, graph_name+'/branch.module-3502')
+            saver.restore(sess, model_name)
             dataset=data_process()
-            for epoch in range(10):
+            for epoch in range(20):
                 x_batch,y_batch=dataset.fine_tune_next_batch(100,branch_class)
                 print ("keep prob", keep_prob.eval(), "train_mode: ", train_mode.eval())
                 for step in range(len(x_batch)):
@@ -114,7 +121,11 @@ def fine_tune(graph_name,num_class,branch_class,g):
                     feed_dict={image:x_batch[step],target:y_batch[step]}
                     acc=sess.run(accuracy,feed_dict=feed_dict)
                     test_accuracy+=acc
-                print("test accuracy is %f"%(test_accuracy/len(x_batch)))
+                test_accuracy = test_accuracy / len(x_batch)
+                print("test accuracy is %f" % test_accuracy)
+                if (test_accuracy > best_acc):
+                    best_acc = test_accuracy
+        return best_acc 
 
 def main():
     root_initial_image=tf.placeholder(tf.float32,[None,32,32,3])

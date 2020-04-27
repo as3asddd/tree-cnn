@@ -13,8 +13,12 @@ class branch_network():
         print(self.keep_prob)
         print(self.train_mode)
 
-    def conv_bn(self, feature, filters, kernel):
-        conv = tf.layers.conv2d(feature, filters, kernel, padding='same')
+    def conv_bn(self, feature, filters, kernel, is_reg = False):
+        if (is_reg):
+            regularizer = tf.contrib.layers.l2_regularizer(scale=0.1)
+        else:
+            regularizer = None
+        conv = tf.layers.conv2d(feature, filters, kernel, padding='same', kernel_regularizer = regularizer)
         bn = tf.layers.batch_normalization(conv, training=self.train_mode)
         return tf.nn.relu(bn)
 
@@ -54,32 +58,36 @@ class branch_network():
         bn_moving_vars = [g for g in g_list if 'moving_mean' in g.name]
         bn_moving_vars += [g for g in g_list if 'moving_variance' in g.name]
         var_list += bn_moving_vars
-        saver = tf.train.Saver(var_list)
+        saver = tf.train.Saver(var_list, max_to_keep = None)
+        best_test_acc = 0
+        best_model_name = ""
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             dataset=data_process()
-            for epoch in range(30):
-                if (self.name == "branch1"):
-                    used_labels = [3, 5, 7]
-                else:
-                    used_labels = [1, 8, 9]
-                print (self.name, used_labels)
-                x_batch,y_batch=dataset.fine_tune_next_batch(128, used_labels)
+            for epoch in range(20):
+                x_batch, y_batch = dataset.next_batch(128, self.name)
+                #x_batch,y_batch=dataset.fine_tune_next_batch(128, used_labels)
                 for step in range(len(x_batch)):
                     loss,_,acc=sess.run([cross_entropy,optimizer,accuracy],
                                         feed_dict={self.image:x_batch[step],self.target:y_batch[step],
                                                    self.keep_prob:[0.25,0.5],self.train_mode:True})
                     if step%10==9:
-                        saver.save(sess,self.name+'_initial_variables/branch.module',global_step=epoch*len(x_batch)+step)
                         print("number epoch %d,number step %d,cross entropy is %f"%(epoch,step,loss))
                         print("number epoch %d,number step %d,accuracy is %f"%(epoch,step,acc))
                 test_accuracy=0
-                x_batch,y_batch=dataset.fine_tune_next_batch(128, used_labels, mode='test')
+                saver.save(sess,self.name+'_initial_variables/branch.module',global_step=epoch*len(x_batch))
+                best_tmp_name = self.name + '_initial_variables/branch.module-{}'.format(epoch * len(x_batch))
+                x_batch,y_batch=dataset.next_batch(128, self.name, mode='test')
                 for step in range(len(x_batch)):
                     test_acc=sess.run(accuracy,feed_dict={self.image:x_batch[step],self.target:y_batch[step]})
                     test_accuracy+=test_acc
                 print("test accuray is %f"%(test_accuracy/len(x_batch)))
+                if (test_accuracy / len(x_batch) > best_test_acc):
+                    best_test_acc = test_accuracy / len(x_batch)
+                    best_model_name = best_tmp_name
             tf.summary.FileWriter("log", sess.graph)
+        print ('best accuracy : {}, best model name : {}'.format(best_test_acc, best_model_name))
+        return best_test_acc, best_model_name 
 
 
 # image=tf.placeholder(tf.float32,[None,32,32,3])

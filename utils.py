@@ -64,21 +64,21 @@ class data_process():
             if mode=='train':
                 for idx,num in enumerate([3,5,7]):
                     x_data=np.vstack((x_data,self.train_images[np.where(self.train_labels==num)[0]]))
-                    y_data=np.vstack((y_data,np.zeros(len(self.train_images[np.where(self.train_labels==num)[0]]))+idx))
+                    y_data=np.hstack((y_data,np.zeros(len(self.train_images[np.where(self.train_labels==num)[0]]))+idx))
             else:
                 for idx,num in enumerate([3,5,7]):
                     x_data=np.vstack((x_data,self.test_images[np.where(self.test_labels==num)[0]]))
-                    y_data=np.vstack((y_data,np.zeros(len(self.test_images[np.where(self.test_labels==num)[0]]))+idx))
+                    y_data=np.hstack((y_data,np.zeros(len(self.test_images[np.where(self.test_labels==num)[0]]))+idx))
 
         elif node=='branch2':
             if mode=='train':
                 for idx,num in enumerate([1, 8, 9]):
                     x_data=np.vstack((x_data,self.train_images[np.where(self.train_labels==num)[0]]))
-                    y_data=np.vstack((y_data,np.zeros(len(self.train_images[np.where(self.train_labels==num)[0]]))+idx))
+                    y_data=np.hstack((y_data,np.zeros(len(self.train_images[np.where(self.train_labels==num)[0]]))+idx))
             else:
                 for idx, num in enumerate([1,8,9]):
                     x_data=np.vstack((x_data,self.test_images[np.where(self.test_labels==num)[0]]))
-                    y_data=np.vstack((y_data,np.zeros(len(self.test_images[np.where(self.test_labels==num)[0]]))+idx))
+                    y_data=np.hstack((y_data,np.zeros(len(self.test_images[np.where(self.test_labels==num)[0]]))+idx))
 
         size=len(x_data)
         index=np.arange(0,size)
